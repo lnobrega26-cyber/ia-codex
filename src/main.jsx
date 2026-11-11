@@ -14,6 +14,16 @@ function detect(s){
 }
 const API=(import.meta.env.VITE_API_BASE||'https://ia-codex-api-wee5.onrender.com/api').replace(/\/$/,'');
 const PROVIDER_CATALOG=['OpenAI','Claude','Gemini','Grok','DeepSeek','Mistral','Qwen','Kimi','Llama','GLM','MiniMax'];
+let localEnginePromise=null;
+async function getLocalEngine(onProgress){
+  if(!localEnginePromise){
+    localEnginePromise=(async()=>{
+      const {CreateMLCEngine}=await import('@mlc-ai/web-llm');
+      return CreateMLCEngine('Qwen2.5-1.5B-Instruct-q4f16_1-MLC',{initProgressCallback:report=>onProgress?.(report.text||'A preparar o modelo local...')});
+    })().catch(error=>{localEnginePromise=null;throw error});
+  }
+  return localEnginePromise;
+}
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState('register'),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   async function submit(e){
@@ -62,27 +72,38 @@ function MinecraftPanel({pop}){
 }
 
 function App(){
-  const[t,T]=useState('Chat'),[m,M]=useState(''),[msgs,C]=useState([]),[busy,B]=useState(false),[toast,N]=useState(''),[plugins,G]=useState([['Pesquisa Web',true],['Tradutor Multilingue',true],['Gerador de Código',false],['Conector de Vídeo',false]]),[video,V]=useState('60'),[server,S]=useState('Meu servidor'),[session,SS]=useState(()=>localStorage.getItem('codex_session')), [user,U]=useState(null),[catalog,MC]=useState([]),[model,SM]=useState(''),[loading,L]=useState(true),[apiStatus,AS]=useState('checking');
+  const[t,T]=useState('Chat'),[m,M]=useState(''),[msgs,C]=useState([]),[busy,B]=useState(false),[localStatus,LS]=useState(''),[toast,N]=useState(''),[plugins,G]=useState([['Pesquisa Web',true],['Tradutor Multilingue',true],['Gerador de Código',false],['Conector de Vídeo',false]]),[video,V]=useState('60'),[server,S]=useState('Meu servidor'),[session,SS]=useState(()=>localStorage.getItem('codex_session')), [user,U]=useState(null),[catalog,MC]=useState([]),[model,SM]=useState(''),[loading,L]=useState(true),[apiStatus,AS]=useState('checking');
   function pop(s){N(s);setTimeout(()=>N(''),3500)}
   function saveAuth(data){localStorage.setItem('codex_session',data.token);SS(data.token);U(data.user)}
   function logout(){localStorage.removeItem('codex_session');SS(null);U(null);C([])}
-  useEffect(()=>{fetch(API+'/models').then(r=>r.json()).then(d=>{MC(d.models||[]);const free=(d.models||[]).find(x=>x.free);if(free)SM(free.id);else if(d.models?.[0])SM(d.models[0].id)}).catch(()=>{});},[]);
+  useEffect(()=>{fetch(API+'/models').then(r=>r.json()).then(d=>{MC(d.models||[]);const free=(d.models||[]).find(x=>x.free);if(free)SM(free.id);else if(d.models?.[0])SM(d.models[0].id);else SM('local-qwen')}).catch(()=>SM('local-qwen'));},[]);
   useEffect(()=>{let active=true;fetch(API+'/health').then(r=>{if(!r.ok)throw new Error('API indisponível');return r.json()}).then(()=>{if(active)AS('online')}).catch(()=>{if(active)AS('offline')});return()=>{active=false}},[]);
   useEffect(()=>{if(!session){L(false);return}fetch(API+'/auth/me',{headers:{Authorization:'Bearer '+session}}).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error);U(d.user)}).catch(()=>logout()).finally(()=>L(false))},[session]);
   async function send(){
     if(!m.trim()||busy||!user)return;
     const prompt=m.trim(),language=detect(prompt),next=[...msgs,{role:'user',content:prompt,language}];C(next);M('');B(true);
     try{
-      const response=await fetch(API+'/chat',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session},body:JSON.stringify({messages:next.map(x=>({role:x.role,content:x.content})),language,modelId:model})});
-      const data=await response.json();if(!response.ok){if(response.status===401)logout();if(data.credits!==undefined)U(u=>({...u,credits:data.credits}));throw new Error(data.error||'Não foi possível obter resposta.')}
-      C(current=>[...current,{role:'assistant',content:data.reply,language,model:data.model,usedCredits:data.usedCredits}]);U(u=>({...u,credits:data.credits}));
-    }catch(e){C(current=>[...current,{role:'assistant',content:e.message,language:language,error:true}])}finally{B(false)}
+      if(!catalog.length||model==='local-qwen'){
+        if(!navigator.gpu)throw new Error('Este navegador/dispositivo não suporta WebGPU para executar a IA local. Experimenta abrir o site no Chrome ou Edge atualizado num computador compatível.');
+        LS('A descarregar e preparar a IA local (primeira utilização)...');
+        const engine=await getLocalEngine(LS);
+        LS('A gerar resposta...');
+        const result=await engine.chat.completions.create({messages:next.map(x=>({role:x.role,content:x.content})),temperature:0.7,max_tokens:512});
+        const reply=result.choices?.[0]?.message?.content;
+        if(!reply)throw new Error('A IA local não devolveu uma resposta. Tenta novamente.');
+        C(current=>[...current,{role:'assistant',content:reply,language,model:'Qwen2.5 1.5B · local',usedCredits:0}]);
+      }else{
+        const response=await fetch(API+'/chat',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session},body:JSON.stringify({messages:next.map(x=>({role:x.role,content:x.content})),language,modelId:model})});
+        const data=await response.json();if(!response.ok){if(response.status===401)logout();if(data.credits!==undefined)U(u=>({...u,credits:data.credits}));throw new Error(data.error||'Não foi possível obter resposta.')}
+        C(current=>[...current,{role:'assistant',content:data.reply,language,model:data.model,usedCredits:data.usedCredits}]);U(u=>({...u,credits:data.credits}));
+      }
+    }catch(e){C(current=>[...current,{role:'assistant',content:e.message,language:language,error:true}])}finally{LS('');B(false)}
   }
   const nav=[['Chat',MessageSquare],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],...(user.is_admin?[['Admin',Settings2]]:[])];
   if(loading)return <div className="auth-screen">A carregar a IA CODEX...</div>;
   if(!user)return <AuthScreen onAuth={saveAuth}/>;
   return <div className="app"><aside><h2><Sparkles/> IA CODEX</h2><p className="sub">O teu espaço inteligente</p><div className="wallet-mini"><Coins/><b>{user.credits.toLocaleString('pt-PT')}</b><small>TOKENS</small></div><button className="new" onClick={()=>{T('Chat');C([])}}><Plus/> Nova conversa</button><small>ESPAÇO DE TRABALHO</small>{nav.map(([n,I])=><button className={'nav '+(t===n?'sel':'')} onClick={()=>T(n)}><I/>{n}</button>)}<div className="sidebottom">● Conta ativa<br/><small>@{user.username}</small><button className="logout" onClick={logout}><LogOut/> Terminar sessão</button></div></aside><main><header>{t}<span className="header-status"><i className={'api-dot '+apiStatus}/>{apiStatus==='checking'?'A verificar API':apiStatus==='online'?'API ligada':'API indisponível'} <Coins/> {user.credits.toLocaleString('pt-PT')} tokens <Settings2/></span></header>
-  {t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"Nenhuma IA configurada no servidor"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · A IA está a responder...':''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{catalog.length?"Modelos grátis não descontam créditos internos; podem ter limites ou custos definidos pelo fornecedor.":"O chat fica indisponível até o administrador ligar pelo menos um modelo e configurar a chave no servidor."}</footer></section>}
+  {t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="local-qwen">Qwen2.5 1.5B · IA local gratuita (sem chave)</option><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"IA local no teu dispositivo"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · '+(localStatus||'A IA está a responder...'):''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{catalog.length?"Modelos grátis não descontam créditos internos; podem ter limites ou custos definidos pelo fornecedor.":"IA local gratuita: o modelo é descarregado uma vez para este dispositivo, não precisa de chave e as respostas são geradas no teu navegador. Requer WebGPU e espaço disponível."}</footer></section>}
   {t==='Estúdio'&&<section className="page"><small>LABORATÓRIO CRIATIVO</small><h1>Estúdio de criação</h1><p>Cria projetos multimédia através de cenas e segmentos.</p><div className="card"><Clapperboard/><h2>Gerador de vídeos</h2><label>Nome do projeto</label><input placeholder="Novo projeto"/><label>Duração do projeto</label><select value={video} onChange={e=>V(e.target.value)}>{['1','5','15','30','60'].map(x=><option value={x}>Até {x} minutos</option>)}</select><button onClick={()=>pop('O gerador de vídeo ainda precisa de um fornecedor real.')}>Preparar projeto</button><p className="hint">A duração é o limite do projeto, não uma promessa de geração gratuita ilimitada.</p></div><div className="card"><MonitorPlay/><h2>Biblioteca multimédia</h2><p>Organiza cenas, áudio e exportações. Editor em desenvolvimento.</p></div></section>}
   {t==='Plugins'&&<section className="page"><small>EXPANDE AS CAPACIDADES</small><h1>Central de plugins</h1><p>Ativa ferramentas para a IA.</p><button onClick={()=>pop('Plugins externos precisam de integrações e permissões seguras.')}>＋ Adicionar plugin</button><div className="pluginlist">{plugins.map(([n,on],i)=><div className="plugin"><b>{n}</b><button className={on?'on':''} onClick={()=>G(plugins.map((p,j)=>j===i?[p[0],!p[1]]:p))}>{on?'Ativo':'Inativo'}</button></div>)}</div><p className="hint"><ShieldCheck/> Plugins externos devem ter permissões explícitas e execução isolada.</p></section>}
   {t==='Admin'&&<AdminPanel session={session} pop={pop}/>}{t==='Minecraft'&&<MinecraftPanel pop={pop}/>}
