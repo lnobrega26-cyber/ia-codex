@@ -28,7 +28,9 @@ Requer Node.js 20+ e PostgreSQL.
 - `CODEX_JWT_SECRET`: segredo longo e aleatório para assinar sessões.
 - `CODEX_MODELS`: JSON com o catálogo de modelos.
 - `OPENAI_API_KEY` ou outras chaves com o nome indicado em cada modelo.
-- `PORT`: porta HTTP (predefinição 3000).\n- `CODEX_ALLOWED_ORIGIN`: origem do frontend autorizada, por exemplo `https://codexia.com` (pode ser uma lista separada por vírgulas).\n- `VITE_API_BASE`: URL base da API usada no build do frontend, por exemplo `https://api.codexia.com/api`; deixa vazio para usar `/api` na mesma origem.
+- `PORT`: porta HTTP (predefinição 3000).
+- `CODEX_ALLOWED_ORIGIN`: origem do frontend autorizada, por exemplo `https://codexia.com` (pode ser uma lista separada por vírgulas).
+- `VITE_API_BASE`: URL base da API usada no build do frontend, por exemplo `https://api.codexia.com/api`; deixa vazio para usar `/api` na mesma origem.
 
 Exemplo de modelo (configurado no servidor):
 
