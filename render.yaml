@@ -3,19 +3,27 @@ services:
     name: ia-codex-api
     runtime: node
     plan: free
+    region: frankfurt
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
-        value: 20
+        value: "20"
       - key: CODEX_JWT_SECRET
         generateValue: true
       - key: CODEX_ALLOWED_ORIGIN
         value: https://lnobrega26-cyber.github.io,https://iagojo.com,https://www.iagojo.com
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: ia-codex-db
+          property: connectionString
       - key: CODEX_MODELS
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
+        value: "[]"
+
+databases:
+  - name: ia-codex-db
+    plan: free
+    region: frankfurt
+    databaseName: iacodex
+    postgresMajorVersion: "18"
