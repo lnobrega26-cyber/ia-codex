@@ -72,6 +72,61 @@ function MinecraftPanel({pop}){
   </section>
 }
 
+
+function LlamaModule(){
+  const [messages,setMessages]=useState([]);
+  const [prompt,setPrompt]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [status,setStatus]=useState('Pronto para iniciar');
+  async function send(e){
+    e?.preventDefault();
+    const text=prompt.trim();
+    if(!text||busy)return;
+    const next=[...messages,{role:'user',content:text}];
+    setMessages(next);setPrompt('');setBusy(true);
+    try{
+      if(!navigator.gpu)throw new Error('Este navegador ou dispositivo não suporta WebGPU. Experimenta Chrome ou Edge atualizado num computador compatível.');
+      setStatus('A preparar o Llama local...');
+      const engine=await getLocalEngine(setStatus);
+      setStatus('A gerar resposta no teu dispositivo...');
+      const result=await engine.chat.completions.create({
+        messages:[
+          {role:'system',content:'És a IA CODEX, um assistente útil, claro e honesto. Responde no idioma da mensagem mais recente. Se não souberes algo, diz isso; não inventes capacidades, fontes ou resultados.'},
+          ...next
+        ],
+        temperature:0.65,
+        max_tokens:768
+      });
+      const reply=result.choices?.[0]?.message?.content;
+      if(!reply)throw new Error('O modelo não devolveu uma resposta. Tenta novamente.');
+      setMessages(current=>[...current,{role:'assistant',content:reply}]);
+      setStatus('Modelo pronto · execução local');
+    }catch(error){
+      setMessages(current=>[...current,{role:'assistant',content:error.message,error:true}]);
+      setStatus('Não foi possível iniciar o modelo');
+    }finally{setBusy(false)}
+  }
+  return <section className="page llama-page">
+    <small>MÓDULO DE INTELIGÊNCIA LOCAL</small>
+    <h1><BrainCircuit/> Llama Local</h1>
+    <p>Conversa diretamente com o Meta Llama 3.2 1B, executado neste dispositivo através do WebGPU.</p>
+    <div className="llama-status"><span><i className={busy?'loading':''}/>{status}</span><b>Sem chave de API</b></div>
+    <div className="llama-workspace">
+      <div className="llama-toolbar"><b>Conversa local</b><button disabled={busy||!messages.length} onClick={()=>setMessages([])}>Nova conversa</button></div>
+      <div className="llama-transcript">
+        {!messages.length?<div className="llama-empty"><BrainCircuit/><h2>O teu Llama está pronto</h2><p>Escreve uma pergunta para começar. Na primeira utilização, o modelo será descarregado para o navegador.</p></div>:messages.map((item,index)=><article className={'llama-message '+(item.role==='user'?'from-user':'from-ai')+(item.error?' is-error':'')} key={index}><b>{item.role==='user'?'Tu':'Llama · IA CODEX'}</b><p>{item.content}</p></article>)}
+        {busy&&<div className="llama-progress">{status}</div>}
+      </div>
+      <form className="llama-input" onSubmit={send}>
+        <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Pergunta alguma coisa ao Llama..." disabled={busy}/>
+        <button type="submit" disabled={busy||!prompt.trim()}>{busy?'A pensar...':'Enviar'}</button>
+      </form>
+    </div>
+    <div className="llama-info"><ShieldCheck/><span><b>Privacidade e custos:</b> as mensagens deste módulo são processadas localmente e não passam pelo endpoint de modelos externos. Não precisas de uma chave de API nem pagas por token ao fornecedor. O primeiro carregamento exige internet; depois, os ficheiros podem ficar em cache no navegador.</span></div>
+    <p className="hint">Requisitos: navegador com WebGPU, GPU/driver compatível e memória e armazenamento disponíveis. O modelo 1B é compacto e pode ser menos capaz do que modelos maiores.</p>
+  </section>
+}
+
 function App(){
   const[t,T]=useState('Chat'),[m,M]=useState(''),[msgs,C]=useState([]),[busy,B]=useState(false),[localStatus,LS]=useState(''),[toast,N]=useState(''),[plugins,G]=useState([['Pesquisa Web',true],['Tradutor Multilingue',true],['Gerador de Código',false],['Conector de Vídeo',false]]),[video,V]=useState('60'),[server,S]=useState('Meu servidor'),[session,SS]=useState(()=>localStorage.getItem('codex_session')), [user,U]=useState(null),[catalog,MC]=useState([]),[model,SM]=useState(''),[loading,L]=useState(true),[apiStatus,AS]=useState('checking');
   function pop(s){N(s);setTimeout(()=>N(''),3500)}
@@ -100,11 +155,11 @@ function App(){
       }
     }catch(e){C(current=>[...current,{role:'assistant',content:e.message,language:language,error:true}])}finally{LS('');B(false)}
   }
-  const nav=[['Chat',MessageSquare],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user?.is_admin?[['Admin',Settings2]]:[])];
+  const nav=[['Chat',MessageSquare],['Llama Local',BrainCircuit],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user?.is_admin?[['Admin',Settings2]]:[])];
   if(loading)return <div className="auth-screen">A carregar a IA CODEX...</div>;
   if(!user)return <AuthScreen onAuth={saveAuth}/>;
   return <div className="app"><aside><h2><Sparkles/> IA CODEX</h2><p className="sub">O teu espaço inteligente</p><div className="wallet-mini"><Coins/><b>{user.credits.toLocaleString('pt-PT')}</b><small>TOKENS</small></div><button className="new" onClick={()=>{T('Chat');C([])}}><Plus/> Nova conversa</button><small>ESPAÇO DE TRABALHO</small>{nav.map(([n,I])=><button className={'nav '+(t===n?'sel':'')} onClick={()=>T(n)}><I/>{n}</button>)}<div className="sidebottom">● Conta ativa<br/><small>@{user.username}</small><button className="logout" onClick={logout}><LogOut/> Terminar sessão</button></div></aside><main><header>{t}<span className="header-status"><i className={'api-dot '+apiStatus}/>{apiStatus==='checking'?'A verificar API':apiStatus==='online'?'API ligada':'API indisponível'} <Coins/> {user.credits.toLocaleString('pt-PT')} tokens <Settings2/></span></header>
-  {t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="local-llama">Llama 3.2 1B · IA local gratuita (sem chave)</option><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"IA local no teu dispositivo"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · '+(localStatus||'A IA está a responder...'):''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{model==='local-llama'?"Llama 3.2 1B local: sem chave e sem custo por token. O primeiro uso descarrega o modelo para este dispositivo; depois fica guardado no navegador. Requer WebGPU, ligação à internet no primeiro carregamento e memória/disco suficientes.":"Modelos externos usam o fornecedor configurado e podem ter limites ou custos. Consulta sempre as condições do fornecedor."}</footer></section>}
+  {t==='Llama Local'&&<LlamaModule/>}{t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="local-llama">Llama 3.2 1B · IA local gratuita (sem chave)</option><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"IA local no teu dispositivo"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · '+(localStatus||'A IA está a responder...'):''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{model==='local-llama'?"Llama 3.2 1B local: sem chave e sem custo por token. O primeiro uso descarrega o modelo para este dispositivo; depois fica guardado no navegador. Requer WebGPU, ligação à internet no primeiro carregamento e memória/disco suficientes.":"Modelos externos usam o fornecedor configurado e podem ter limites ou custos. Consulta sempre as condições do fornecedor."}</footer></section>}
   {t==='Estúdio'&&<section className="page"><small>LABORATÓRIO CRIATIVO</small><h1>Estúdio de criação</h1><p>Cria projetos multimédia através de cenas e segmentos.</p><div className="card"><Clapperboard/><h2>Gerador de vídeos</h2><label>Nome do projeto</label><input placeholder="Novo projeto"/><label>Duração do projeto</label><select value={video} onChange={e=>V(e.target.value)}>{['1','5','15','30','60'].map(x=><option value={x}>Até {x} minutos</option>)}</select><button onClick={()=>pop('O gerador de vídeo ainda precisa de um fornecedor real.')}>Preparar projeto</button><p className="hint">A duração é o limite do projeto, não uma promessa de geração gratuita ilimitada.</p></div><div className="card"><MonitorPlay/><h2>Biblioteca multimédia</h2><p>Organiza cenas, áudio e exportações. Editor em desenvolvimento.</p></div></section>}
   {t==='Plugins'&&<section className="page"><small>EXPANDE AS CAPACIDADES</small><h1>Central de plugins</h1><p>Ativa ferramentas para a IA.</p><button onClick={()=>pop('Plugins externos precisam de integrações e permissões seguras.')}>＋ Adicionar plugin</button><div className="pluginlist">{plugins.map(([n,on],i)=><div className="plugin"><b>{n}</b><button className={on?'on':''} onClick={()=>G(plugins.map((p,j)=>j===i?[p[0],!p[1]]:p))}>{on?'Ativo':'Inativo'}</button></div>)}</div><p className="hint"><ShieldCheck/> Plugins externos devem ter permissões explícitas e execução isolada.</p></section>}
   {t==='Admin'&&<AdminPanel session={session} pop={pop}/>}{t==='Minecraft'&&<MinecraftPanel pop={pop}/>}{t==='DarkOS'&&<DarkOS/>}
