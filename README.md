@@ -22,6 +22,22 @@ Requer Node.js 20+ e PostgreSQL.
 5. Inicia o backend com `npm start`.
 6. Em desenvolvimento, inicia também `npm run dev`; o Vite encaminha `/api` para a porta 3000.
 
+### Primeiro administrador
+
+Depois de criares a tua conta normalmente, executa uma única vez na base de dados:
+
+```sql
+UPDATE codex_users SET is_admin = TRUE WHERE username = 'O_TEU_UTILIZADOR';
+```
+
+Sai da conta e volta a entrar. O separador **Admin** aparecerá apenas para contas com esta permissão. Não dês esta permissão a utilizadores comuns.
+
+No painel Admin podes criar/editar modelos, definir custos internos e ativar/desativar modelos. As chaves continuam no ambiente do backend, por exemplo `OPENAI_API_KEY`; o campo do painel apenas indica o nome da variável que contém a chave.
+
+### Atualizar a base de dados existente
+
+Se já tinhas criado as tabelas antes desta atualização, volta a executar `database/schema.sql`. O script acrescenta a permissão de administrador e cria a tabela do catálogo de modelos sem apagar as contas existentes.
+
 ### Variáveis
 
 - `DATABASE_URL`: ligação PostgreSQL.
