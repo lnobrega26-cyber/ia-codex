@@ -17,3 +17,20 @@ CREATE TABLE IF NOT EXISTS codex_credit_transactions (
 
 CREATE INDEX IF NOT EXISTS codex_credit_transactions_user_created
   ON codex_credit_transactions(user_id, created_at DESC);
+
+ALTER TABLE codex_users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS codex_models (
+  id VARCHAR(60) PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  provider VARCHAR(80) NOT NULL,
+  model VARCHAR(160) NOT NULL,
+  api_base TEXT NOT NULL,
+  api_key_env VARCHAR(80) NOT NULL,
+  input_cost_per_1k NUMERIC(12,4) NOT NULL CHECK (input_cost_per_1k >= 0),
+  output_cost_per_1k NUMERIC(12,4) NOT NULL CHECK (output_cost_per_1k >= 0),
+  free BOOLEAN NOT NULL DEFAULT FALSE,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  description VARCHAR(180) NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
