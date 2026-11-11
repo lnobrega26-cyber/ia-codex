@@ -9,7 +9,7 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false }
 }) : null;
-const buckets = new Map();
+const ALLOWED_ORIGINS = (process.env.CODEX_ALLOWED_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);\nconst buckets = new Map();
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 25;
 const MAX_BODY = 1024 * 1024;
