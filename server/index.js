@@ -30,8 +30,8 @@ function envModels() {
 async function models() {
   if (pool) {
     try {
-      const result = await pool.query('SELECT id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,description FROM codex_models WHERE enabled=true ORDER BY name');
-      if (result.rows.length) return result.rows.map(m => ({
+      const result = await pool.query('SELECT id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,description,enabled FROM codex_models ORDER BY name');
+      if (result.rows.length) return result.rows.filter(m => m.enabled).map(m => ({
         id:m.id,name:m.name,provider:m.provider,model:m.model,apiBase:m.api_base,apiKeyEnv:m.api_key_env,
         inputCostPer1k:Number(m.input_cost_per_1k),outputCostPer1k:Number(m.output_cost_per_1k),free:m.free,description:m.description
       }));
