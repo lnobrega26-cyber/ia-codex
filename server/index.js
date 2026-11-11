@@ -213,7 +213,8 @@ const server = http.createServer(async (req, res) => {
       }
       return send(res, 404, { error: 'Rota administrativa não encontrada.' });
     }
-\n    if (url.pathname === '/api/chat' && req.method === 'POST') {
+
+    if (url.pathname === '/api/chat' && req.method === 'POST') {
       if (!pool || !JWT_SECRET) return send(res, 503, { error: 'Autenticação e base de dados ainda não configuradas.' });
       const claims = auth(req), data = await body(req);
       if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40) return send(res, 400, { error: 'Lista de mensagens inválida (máximo 40).' });
