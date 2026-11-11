@@ -15,15 +15,33 @@ function detect(s){
 }
 const API=(import.meta.env.VITE_API_BASE||'https://ia-codex-api-wee5.onrender.com/api').replace(/\/$/,'');
 const PROVIDER_CATALOG=['OpenAI','Claude','Gemini','Grok','DeepSeek','Mistral','Qwen','Kimi','Llama','GLM','MiniMax'];
+const LOCAL_LLAMA_ID='Llama-3.2-1B-Instruct-q4f16_1-MLC';
 let localEnginePromise=null;
+let localEngineListeners=new Set();
 async function getLocalEngine(onProgress){
-  if(!localEnginePromise){
-    localEnginePromise=(async()=>{
-      const {CreateMLCEngine}=await import('@mlc-ai/web-llm');
-      return CreateMLCEngine('Llama-3.2-1B-Instruct-q4f16_1-MLC',{initProgressCallback:report=>onProgress?.(report.text||'A preparar o modelo local...')});
-    })().catch(error=>{localEnginePromise=null;throw error});
+  if(onProgress)localEngineListeners.add(onProgress);
+  try{
+    if(!localEnginePromise){
+      localEnginePromise=(async()=>{
+        const {CreateMLCEngine,prebuiltAppConfig}=await import('@mlc-ai/web-llm');
+        const supported=prebuiltAppConfig.model_list.some(item=>item.model_id===LOCAL_LLAMA_ID);
+        if(!supported)throw new Error('O modelo Llama configurado não está disponível nesta versão do WebLLM. Atualiza a aplicação e tenta novamente.');
+        return CreateMLCEngine(LOCAL_LLAMA_ID,{initProgressCallback:report=>{
+          const message=report.text||'A preparar o modelo local...';
+          localEngineListeners.forEach(listener=>listener(message));
+        }});
+      })().catch(error=>{localEnginePromise=null;throw error});
+    }
+    return await localEnginePromise;
+  }finally{
+    if(onProgress)localEngineListeners.delete(onProgress);
   }
-  return localEnginePromise;
+}
+async function checkLocalWebGPU(){
+  if(!navigator.gpu)throw new Error('Este navegador não suporta WebGPU. Experimenta um navegador atualizado num dispositivo compatível.');
+  const adapter=await navigator.gpu.requestAdapter();
+  if(!adapter)throw new Error('Não foi encontrada uma GPU compatível com WebGPU. Verifica o navegador, os controladores gráficos e as definições do dispositivo.');
+  return adapter;
 }
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState('register'),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -77,17 +95,33 @@ function LlamaModule(){
   const [messages,setMessages]=useState([]);
   const [prompt,setPrompt]=useState('');
   const [busy,setBusy]=useState(false);
-  const [status,setStatus]=useState('Pronto para iniciar');
+  const [ready,setReady]=useState(false);
+  const [status,setStatus]=useState('Modelo ainda não carregado');
+  async function prepare(){
+    if(busy||ready)return;
+    setBusy(true);
+    try{
+      await checkLocalWebGPU();
+      setStatus('A descarregar e preparar o Llama...');
+      await getLocalEngine(setStatus);
+      setReady(true);
+      setStatus('Llama pronto · execução local');
+    }catch(error){
+      setStatus('Não foi possível iniciar o modelo');
+      setMessages(current=>[...current,{role:'assistant',content:error.message,error:true}]);
+    }finally{setBusy(false)}
+  }
   async function send(e){
     e?.preventDefault();
     const text=prompt.trim();
     if(!text||busy)return;
-    const next=[...messages,{role:'user',content:text}];
+    const next=[...messages.filter(item=>!item.error),{role:'user',content:text}];
     setMessages(next);setPrompt('');setBusy(true);
     try{
-      if(!navigator.gpu)throw new Error('Este navegador ou dispositivo não suporta WebGPU. Experimenta Chrome ou Edge atualizado num computador compatível.');
+      await checkLocalWebGPU();
       setStatus('A preparar o Llama local...');
       const engine=await getLocalEngine(setStatus);
+      setReady(true);
       setStatus('A gerar resposta no teu dispositivo...');
       const result=await engine.chat.completions.create({
         messages:[
@@ -100,7 +134,7 @@ function LlamaModule(){
       const reply=result.choices?.[0]?.message?.content;
       if(!reply)throw new Error('O modelo não devolveu uma resposta. Tenta novamente.');
       setMessages(current=>[...current,{role:'assistant',content:reply}]);
-      setStatus('Modelo pronto · execução local');
+      setStatus('Llama pronto · execução local');
     }catch(error){
       setMessages(current=>[...current,{role:'assistant',content:error.message,error:true}]);
       setStatus('Não foi possível iniciar o modelo');
@@ -112,9 +146,9 @@ function LlamaModule(){
     <p>Conversa diretamente com o Meta Llama 3.2 1B, executado neste dispositivo através do WebGPU.</p>
     <div className="llama-status"><span><i className={busy?'loading':''}/>{status}</span><b>Sem chave de API</b></div>
     <div className="llama-workspace">
-      <div className="llama-toolbar"><b>Conversa local</b><button disabled={busy||!messages.length} onClick={()=>setMessages([])}>Nova conversa</button></div>
+      <div className="llama-toolbar"><b>Conversa local</b><div className="llama-toolbar-actions"><button disabled={busy||ready} onClick={prepare}>{ready?'Modelo carregado':busy?'A carregar...':'Preparar Llama'}</button><button disabled={busy||!messages.length} onClick={()=>setMessages([])}>Nova conversa</button></div></div>
       <div className="llama-transcript">
-        {!messages.length?<div className="llama-empty"><BrainCircuit/><h2>O teu Llama está pronto</h2><p>Escreve uma pergunta para começar. Na primeira utilização, o modelo será descarregado para o navegador.</p></div>:messages.map((item,index)=><article className={'llama-message '+(item.role==='user'?'from-user':'from-ai')+(item.error?' is-error':'')} key={index}><b>{item.role==='user'?'Tu':'Llama · IA CODEX'}</b><p>{item.content}</p></article>)}
+        {!messages.length?<div className="llama-empty"><BrainCircuit/><h2>O teu Llama está pronto</h2><p>Prepara o modelo ou envia uma pergunta. Na primeira utilização, os ficheiros serão descarregados para o navegador.</p></div>:messages.map((item,index)=><article className={'llama-message '+(item.role==='user'?'from-user':'from-ai')+(item.error?' is-error':'')} key={index}><b>{item.role==='user'?'Tu':'Llama · IA CODEX'}</b><p>{item.content}</p></article>)}
         {busy&&<div className="llama-progress">{status}</div>}
       </div>
       <form className="llama-input" onSubmit={send}>
@@ -123,7 +157,7 @@ function LlamaModule(){
       </form>
     </div>
     <div className="llama-info"><ShieldCheck/><span><b>Privacidade e custos:</b> as mensagens deste módulo são processadas localmente e não passam pelo endpoint de modelos externos. Não precisas de uma chave de API nem pagas por token ao fornecedor. O primeiro carregamento exige internet; depois, os ficheiros podem ficar em cache no navegador.</span></div>
-    <p className="hint">Requisitos: navegador com WebGPU, GPU/driver compatível e memória e armazenamento disponíveis. O modelo 1B é compacto e pode ser menos capaz do que modelos maiores.</p>
+    <p className="hint">Requisitos: navegador com WebGPU, GPU/driver compatível, cerca de 1 GB de memória gráfica disponível e espaço para guardar os ficheiros do modelo. O modelo 1B é compacto e pode ser menos capaz do que modelos maiores.</p>
   </section>
 }
 
