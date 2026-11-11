@@ -14,7 +14,7 @@ const buckets = new Map();
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 25;
 const MAX_BODY = 1024 * 1024;
-const STARTER_CREDITS = 10000;
+const STARTER_CREDITS = 1000;
 const MAX_OUTPUT_TOKENS = 2048;
 
 function envModels() {
@@ -136,7 +136,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (!rateAllowed(ip)) return send(res, 429, { error: 'Muitos pedidos. Tenta novamente dentro de um minuto.' });
   if (req.method === 'GET' && url.pathname === '/api/health') {
-    return send(res, 200, { ok: true, databaseConfigured: Boolean(pool), authConfigured: Boolean(JWT_SECRET), modelsConfigured: publicModels().length });
+    return send(res, 200, { ok: true, databaseConfigured: Boolean(pool), authConfigured: Boolean(JWT_SECRET), modelsConfigured: (await publicModels()).length });
   }
   if (req.method === 'GET' && url.pathname === '/api/models') {
     return send(res, 200, { models: await publicModels() });
