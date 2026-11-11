@@ -161,6 +161,91 @@ function LlamaModule(){
   </section>
 }
 
+
+function OllamaModule(){
+  const [endpoint,setEndpoint]=useState('http://localhost:11434');
+  const [model,setModel]=useState('llama3');
+  const [models,setModels]=useState([]);
+  const [messages,setMessages]=useState([]);
+  const [prompt,setPrompt]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [status,setStatus]=useState('Ollama ainda não ligado');
+  async function refresh(){
+    setBusy(true);setStatus('A procurar modelos no Ollama...');
+    try{
+      const response=await fetch(endpoint.replace(/\\/$/,'')+'/api/tags');
+      const data=await response.json();
+      if(!response.ok)throw new Error(data.error||'Ollama não respondeu.');
+      const names=(data.models||[]).map(item=>item.name).filter(Boolean);
+      setModels(names);
+      if(names.length&&!names.includes(model))setModel(names[0]);
+      setStatus(names.length?'Ligado · '+names.length+' modelo(s) encontrado(s)':'Ollama ligado · ainda sem modelos descarregados');
+    }catch(error){
+      setStatus('Não foi possível ligar ao Ollama');
+      setMessages(current=>[...current,{role:'assistant',content:error.message+' Confirma se o Ollama está instalado e em execução, e se a origem do site está autorizada em OLLAMA_ORIGINS.',error:true}]);
+    }finally{setBusy(false)}
+  }
+  async function send(e){
+    e?.preventDefault();
+    const text=prompt.trim();
+    if(!text||busy||!model.trim())return;
+    const next=[...messages.filter(item=>!item.error),{role:'user',content:text}];
+    setMessages(next);setPrompt('');setBusy(true);setStatus('A gerar resposta com '+model+'...');
+    try{
+      const response=await fetch(endpoint.replace(/\\/$/,'')+'/api/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({model:model.trim(),messages:next.map(item=>({role:item.role,content:item.content})),stream:false})
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Pedido recusado pelo Ollama (HTTP '+response.status+').');
+      const reply=data.message?.content;
+      if(typeof reply!=='string'||!reply.trim())throw new Error('Ollama não devolveu texto. Confirma se o modelo está descarregado.');
+      setMessages(current=>[...current,{role:'assistant',content:reply}]);
+      setStatus('Ligado · '+model);
+    }catch(error){
+      setMessages(current=>[...current,{role:'assistant',content:error.message+' Se aparecer um erro de rede/CORS, configura OLLAMA_ORIGINS no computador onde o Ollama está instalado e reinicia o serviço.',error:true}]);
+      setStatus('Falha na comunicação com Ollama');
+    }finally{setBusy(false)}
+  }
+  return <section className="page">
+    <small>MODELO EXECUTADO NO TEU COMPUTADOR</small>
+    <h1><Terminal/> Ollama</h1>
+    <p>Usa modelos instalados com Ollama, como Llama 3, diretamente a partir da IA CODEX. O processamento acontece no computador onde o Ollama está a correr.</p>
+    <div className="card">
+      <h2>Ligação local</h2>
+      <label>Endereço do Ollama</label>
+      <input value={endpoint} onChange={e=>setEndpoint(e.target.value)} placeholder="http://localhost:11434"/>
+      <label>Nome do modelo</label>
+      <input value={model} onChange={e=>setModel(e.target.value)} placeholder="llama3"/>
+      <p className="hint">{models.length?'Modelos detetados: '+models.join(', '):'Ainda não foi carregada a lista de modelos.'}</p>
+      <button disabled={busy||!endpoint.trim()} onClick={refresh}>Testar ligação e listar modelos</button>
+      <p className="hint">{status}</p>
+    </div>
+    <div className="card">
+      <h2>Conversa com Ollama</h2>
+      <div className="llama-transcript">
+        {!messages.length?<div className="llama-empty"><Terminal/><h2>O teu modelo local</h2><p>Instala o Ollama, descarrega um modelo e testa a ligação antes de enviar uma pergunta.</p></div>:messages.map((item,index)=><article className={'llama-message '+(item.role==='user'?'from-user':'from-ai')+(item.error?' is-error':'')} key={index}><b>{item.role==='user'?'Tu':'Ollama · '+model}</b><p>{item.content}</p></article>)}
+        {busy&&<div className="llama-progress">{status}</div>}
+      </div>
+      <form className="llama-input" onSubmit={send}>
+        <textarea value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Escreve uma pergunta..." disabled={busy}/>
+        <button type="submit" disabled={busy||!prompt.trim()||!model.trim()}>{busy?'A pensar...':'Enviar'}</button>
+      </form>
+      <button disabled={busy||!messages.length} onClick={()=>setMessages([])}>Nova conversa</button>
+    </div>
+    <div className="card">
+      <h2>Preparar o Ollama</h2>
+      <p>1. Instala o Ollama a partir de <a href="https://ollama.com/download" target="_blank" rel="noreferrer">ollama.com/download</a>.</p>
+      <p>2. No terminal do teu computador, executa:</p>
+      <pre><code>ollama pull llama3</code></pre>
+      <p>3. Confirma que o serviço está ativo e que o modelo aparece com:</p>
+      <pre><code>ollama list</code></pre>
+      <p>4. Como a IA CODEX está num site, o navegador pode bloquear a ligação local por CORS. Autoriza a origem do site na variável <code>OLLAMA_ORIGINS</code> e reinicia o Ollama. Para desenvolvimento local, autoriza também <code>http://localhost:5173</code>.</p>
+      <p className="hint">Este módulo não instala nem descarrega modelos por ti. O comando de instalação é executado no teu computador. Não coloques chaves secretas nesta página.</p>
+    </div>
+  </section>
+}
+
 function App(){
   const[t,T]=useState('Chat'),[m,M]=useState(''),[msgs,C]=useState([]),[busy,B]=useState(false),[localStatus,LS]=useState(''),[toast,N]=useState(''),[plugins,G]=useState([['Pesquisa Web',true],['Tradutor Multilingue',true],['Gerador de Código',false],['Conector de Vídeo',false]]),[video,V]=useState('60'),[server,S]=useState('Meu servidor'),[session,SS]=useState(()=>localStorage.getItem('codex_session')), [user,U]=useState(null),[catalog,MC]=useState([]),[model,SM]=useState(''),[loading,L]=useState(true),[apiStatus,AS]=useState('checking');
   function pop(s){N(s);setTimeout(()=>N(''),3500)}
@@ -189,11 +274,11 @@ function App(){
       }
     }catch(e){C(current=>[...current,{role:'assistant',content:e.message,language:language,error:true}])}finally{LS('');B(false)}
   }
-  const nav=[['Chat',MessageSquare],['Llama Local',BrainCircuit],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user?.is_admin?[['Admin',Settings2]]:[])];
+  const nav=[['Chat',MessageSquare],['Llama Local',BrainCircuit],['Ollama',Terminal],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user?.is_admin?[['Admin',Settings2]]:[])];
   if(loading)return <div className="auth-screen">A carregar a IA CODEX...</div>;
   if(!user)return <AuthScreen onAuth={saveAuth}/>;
   return <div className="app"><aside><h2><Sparkles/> IA CODEX</h2><p className="sub">O teu espaço inteligente</p><div className="wallet-mini"><Coins/><b>{user.credits.toLocaleString('pt-PT')}</b><small>TOKENS</small></div><button className="new" onClick={()=>{T('Chat');C([])}}><Plus/> Nova conversa</button><small>ESPAÇO DE TRABALHO</small>{nav.map(([n,I])=><button className={'nav '+(t===n?'sel':'')} onClick={()=>T(n)}><I/>{n}</button>)}<div className="sidebottom">● Conta ativa<br/><small>@{user.username}</small><button className="logout" onClick={logout}><LogOut/> Terminar sessão</button></div></aside><main><header>{t}<span className="header-status"><i className={'api-dot '+apiStatus}/>{apiStatus==='checking'?'A verificar API':apiStatus==='online'?'API online':'API offline'} · {catalog.length} modelos API · 1 modelo local <Coins/> {user.credits.toLocaleString('pt-PT')} tokens <Settings2/></span></header>
-  {t==='Llama Local'&&<LlamaModule/>}{t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="local-llama">Llama 3.2 1B · IA local gratuita (sem chave)</option><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"IA local no teu dispositivo"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · '+(localStatus||'A IA está a responder...'):''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{model==='local-llama'?"Llama 3.2 1B local: sem chave e sem custo por token. O primeiro uso descarrega o modelo para este dispositivo; depois fica guardado no navegador. Requer WebGPU, ligação à internet no primeiro carregamento e memória/disco suficientes.":"Modelos externos usam o fornecedor configurado e podem ter limites ou custos. Consulta sempre as condições do fornecedor."}</footer></section>}
+  {t==='Llama Local'&&<LlamaModule/>}{t==='Ollama'&&<OllamaModule/>}{t==='Chat'&&<section className="chat">{!msgs.length?<div className="welcome"><Sparkles/><small>INTELIGÊNCIA SEM FRONTEIRAS</small><h1>O que vamos criar<br/><em>hoje?</em></h1><p>Escolhe um modelo e começa uma conversa.</p><div className="ideas">{[[Code2,'Escrever código'],[Clapperboard,'Criar um vídeo'],[Compass,'Explorar o mundo']].map(([I,n])=><button onClick={()=>M(n)}><I/>{n}</button>)}</div></div>:<div className="messages">{msgs.map((x,i)=><article className={x.error?'message-error':''}><b>{x.role==='user'?'Tu':'IA CODEX'} · {x.language}</b><p>{x.content}</p>{x.role==='assistant'&&x.usedCredits>0&&<small>−{x.usedCredits} tokens · {x.model}</small>}</article>)}</div>}<div className="composer"><div className="model-picker"><BrainCircuit/><select value={model} onChange={e=>SM(e.target.value)}><option value="local-llama">Llama 3.2 1B · IA local gratuita (sem chave)</option><option value="" disabled>{catalog.length?"Seleciona um modelo ligado":"IA local no teu dispositivo"}</option>{PROVIDER_CATALOG.map(provider=><option key={provider} value={'unavailable-'+provider} disabled>{provider} — Integração pendente</option>)}<optgroup label="Modelos ligados">{catalog.map(x=><option key={x.id} value={x.id}>{x.name} · {x.free?'GRÁTIS':x.inputCostPer1k+'/'+x.outputCostPer1k+' tokens por 1k'}</option>)}</optgroup></select></div><textarea value={m} onChange={e=>M(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}} placeholder="Escreve em qualquer idioma..."/><div><span><Languages/> {m?detect(m):'Deteção automática'}{busy?' · '+(localStatus||'A IA está a responder...'):''}</span><button disabled={!m.trim()||busy} onClick={send}><ArrowUp/></button></div></div><footer>{model==='local-llama'?"Llama 3.2 1B local: sem chave e sem custo por token. O primeiro uso descarrega o modelo para este dispositivo; depois fica guardado no navegador. Requer WebGPU, ligação à internet no primeiro carregamento e memória/disco suficientes.":"Modelos externos usam o fornecedor configurado e podem ter limites ou custos. Consulta sempre as condições do fornecedor."}</footer></section>}
   {t==='Estúdio'&&<section className="page"><small>LABORATÓRIO CRIATIVO</small><h1>Estúdio de criação</h1><p>Cria projetos multimédia através de cenas e segmentos.</p><div className="card"><Clapperboard/><h2>Gerador de vídeos</h2><label>Nome do projeto</label><input placeholder="Novo projeto"/><label>Duração do projeto</label><select value={video} onChange={e=>V(e.target.value)}>{['1','5','15','30','60'].map(x=><option value={x}>Até {x} minutos</option>)}</select><button onClick={()=>pop('O gerador de vídeo ainda precisa de um fornecedor real.')}>Preparar projeto</button><p className="hint">A duração é o limite do projeto, não uma promessa de geração gratuita ilimitada.</p></div><div className="card"><MonitorPlay/><h2>Biblioteca multimédia</h2><p>Organiza cenas, áudio e exportações. Editor em desenvolvimento.</p></div></section>}
   {t==='Plugins'&&<section className="page"><small>EXPANDE AS CAPACIDADES</small><h1>Central de plugins</h1><p>Ativa ferramentas para a IA.</p><button onClick={()=>pop('Plugins externos precisam de integrações e permissões seguras.')}>＋ Adicionar plugin</button><div className="pluginlist">{plugins.map(([n,on],i)=><div className="plugin"><b>{n}</b><button className={on?'on':''} onClick={()=>G(plugins.map((p,j)=>j===i?[p[0],!p[1]]:p))}>{on?'Ativo':'Inativo'}</button></div>)}</div><p className="hint"><ShieldCheck/> Plugins externos devem ter permissões explícitas e execução isolada.</p></section>}
   {t==='Admin'&&<AdminPanel session={session} pop={pop}/>}{t==='Minecraft'&&<MinecraftPanel pop={pop}/>}{t==='DarkOS'&&<DarkOS/>}
