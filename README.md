@@ -74,7 +74,7 @@ O bónus é atribuído uma vez por conta criada. Esta primeira versão não tem 
 
 ## Publicação
 
-GitHub Pages só serve a interface estática. A API e a base de dados precisam de alojamento próprio. Publica o backend num serviço Node.js e configura nele as variáveis de ambiente. Se a API ficar num domínio diferente, define `VITE_API_BASE` antes do build e autoriza a origem do site em `CODEX_ALLOWED_ORIGIN`. Nunca coloques chaves secretas em React, no repositório ou em variáveis `VITE_*`.
+GitHub Pages só serve a interface estática. A API e a base de dados precisam de alojamento próprio. Publica o backend num serviço Node.js e configura nele as variáveis de ambiente. O domínio do site configurado no repositório é `iagojo.com`; em GitHub Settings → Pages, define também `iagojo.com` como Custom domain. Para o domínio raiz, configura os registos A `@` para `185.199.108.153`, `185.199.109.153`, `185.199.110.153` e `185.199.111.153`. Opcionalmente, cria um CNAME `www` para `lnobrega26-cyber.github.io`. As alterações DNS podem demorar até 24 horas. Se a API ficar num domínio diferente, define `VITE_API_BASE` antes do build e autoriza a origem do site em `CODEX_ALLOWED_ORIGIN`. Nunca coloques chaves secretas em React, no repositório ou em variáveis `VITE_*`.
 
 ## O que ainda não está implementado
 
