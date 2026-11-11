@@ -166,11 +166,11 @@ const server = http.createServer(async (req, res) => {
         return { role: m.role, content: m.content.slice(0, 12000) };
       });
       const catalog = models();
-      const selected = catalog.find(m => m.id === data.modelId) || catalog.find(m => m.free);
-      if (!selected) return send(res, 503, { error: 'Nenhum modelo está configurado. Adiciona pelo menos um modelo gratuito no servidor.' });
+      const selected = data.modelId ? catalog.find(m => m.id === data.modelId) : catalog.find(m => m.free);
+      if (!selected) return send(res, data.modelId ? 400 : 503, { error: data.modelId ? 'Modelo inválido ou indisponível.' : 'Nenhum modelo está configurado. Adiciona pelo menos um modelo gratuito no servidor.' });
       const key = process.env[selected.apiKeyEnv];
       if (!key) return send(res, 503, { error: 'O fornecedor deste modelo ainda não está configurado no servidor.' });
-      const inputEstimate = estimatedTokens(messages) + 100;
+      const totalChars = messages.reduce((sum, item) => sum + item.content.length, 0);\n      if (totalChars > 30000) return send(res, 413, { error: 'A conversa é demasiado longa. Começa uma nova conversa ou reduz o texto.' });\n      const inputEstimate = Math.ceil(totalChars / 2) + 200;
       const reserve = selected.free ? 0 : Math.ceil(inputEstimate * Number(selected.inputCostPer1k) / 1000 + MAX_OUTPUT_TOKENS * Number(selected.outputCostPer1k) / 1000);
       const afterReserve = await reserveCredits(claims.sub, reserve, selected.id);
       if (afterReserve === null) {
