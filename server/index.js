@@ -14,8 +14,8 @@ const buckets = new Map();
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 25;
 const MAX_BODY = 1024 * 1024;
-const STARTER_CREDITS = 1000;
-const MAX_OUTPUT_TOKENS = 1200;
+const STARTER_CREDITS = 10000;
+const MAX_OUTPUT_TOKENS = 1200000000000000;
 
 function envModels() {
   try {
