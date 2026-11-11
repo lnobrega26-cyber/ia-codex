@@ -27,8 +27,20 @@ function envModels() {
       && Number.isFinite(Number(m.inputCostPer1k)) && Number.isFinite(Number(m.outputCostPer1k)));
   } catch { return []; }
 }
-function publicModels() {
-  return models().map(m => ({
+async function models() {
+  if (pool) {
+    try {
+      const result = await pool.query('SELECT id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,description FROM codex_models WHERE enabled=true ORDER BY name');
+      if (result.rows.length) return result.rows.map(m => ({
+        id:m.id,name:m.name,provider:m.provider,model:m.model,apiBase:m.api_base,apiKeyEnv:m.api_key_env,
+        inputCostPer1k:Number(m.input_cost_per_1k),outputCostPer1k:Number(m.output_cost_per_1k),free:m.free,description:m.description
+      }));
+    } catch (error) { if (error.code !== '42P01') throw error; }
+  }
+  return envModels();
+}
+async function publicModels() {
+  return (await models()).map(m => ({
     id: m.id, name: m.name, provider: m.provider,
     description: String(m.description || '').slice(0, 180),
     free: Boolean(m.free),
