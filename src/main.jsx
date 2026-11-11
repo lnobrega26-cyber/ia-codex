@@ -63,4 +63,7 @@ function App(){
   {t==='Admin'&&<AdminPanel session={session} pop={pop}/>}{t==='Minecraft'&&<section className="page"><small>GAME SERVER LAB</small><h1>Servidor Minecraft</h1><p>Prepara a configuração do teu servidor.</p><div className="card"><Server/><h2>Configuração</h2><label>Nome</label><input value={server} onChange={e=>S(e.target.value)}/><label>Versão</label><select><option>1.21.4</option><option>1.21.1</option><option>1.20.6</option></select><label>Tipo</label><select><option>Vanilla</option><option>Paper (plugins)</option><option>Fabric (mods)</option><option>Forge (mods)</option></select><button onClick={()=>pop('A gestão real precisa de integração com um fornecedor de alojamento.')}>Preparar servidor</button></div><div className="card"><Terminal/><h2>Publicação</h2><p>Para manter o servidor online precisas de um serviço de alojamento. A integração ainda está em desenvolvimento.</p></div></section>}
   </main>{toast&&<div className="toast"><Check/>{toast}</div>}</div>
 }
-const root=createRoot(document.getElementById('root'));\nfunction renderPage(){root.render(window.location.hash==='#app'?<App/>:<Landing/>);}\nwindow.addEventListener('hashchange',renderPage);\nrenderPage();
+const root=createRoot(document.getElementById('root'));
+function renderPage(){root.render(window.location.hash==='#app'?<App/>:<Landing/>);}
+window.addEventListener('hashchange',renderPage);
+renderPage();
