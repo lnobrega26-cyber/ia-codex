@@ -15,7 +15,7 @@ const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 25;
 const MAX_BODY = 1024 * 1024;
 const STARTER_CREDITS = 10000;
-const MAX_OUTPUT_TOKENS = 1200000000000000;
+const MAX_OUTPUT_TOKENS = 2048;
 
 function envModels() {
   try {
@@ -122,6 +122,18 @@ function estimatedTokens(messages) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost');
   const ip = req.socket.remoteAddress || 'unknown';
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  }
+  if (req.method === 'OPTIONS') {
+    if (!origin || !ALLOWED_ORIGINS.includes(origin)) return send(res, 403, { error: 'Origem não autorizada.' });
+    res.writeHead(204);
+    return res.end();
+  }
   if (!rateAllowed(ip)) return send(res, 429, { error: 'Muitos pedidos. Tenta novamente dentro de um minuto.' });
   if (req.method === 'GET' && url.pathname === '/api/health') {
     return send(res, 200, { ok: true, databaseConfigured: Boolean(pool), authConfigured: Boolean(JWT_SECRET), modelsConfigured: publicModels().length });
