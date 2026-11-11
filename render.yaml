@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ia-codex-api
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: CODEX_JWT_SECRET
+        generateValue: true
+      - key: CODEX_ALLOWED_ORIGIN
+        value: https://lnobrega26-cyber.github.io,https://iagojo.com,https://www.iagojo.com
+      - key: DATABASE_URL
+        sync: false
+      - key: CODEX_MODELS
+        sync: false
