@@ -17,3 +17,5 @@ services:
         sync: false
       - key: CODEX_MODELS
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
