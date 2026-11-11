@@ -8,7 +8,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: ia-codex-pages
   cancel-in-progress: true
 jobs:
   build:
