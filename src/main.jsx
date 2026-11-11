@@ -12,7 +12,7 @@ function detect(s){
   if(/\b(the|and|what|how|hello|please)\b/.test(s))return'English';
   return lang[navigator.language?.slice(0,2)]||'Idioma automático';
 }
-const API='/api';
+const API=(import.meta.env.VITE_API_BASE||'/api').replace(/\\/$/,'');
 function AuthScreen({onAuth}){
   const[mode,setMode]=useState('register'),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   async function submit(e){
