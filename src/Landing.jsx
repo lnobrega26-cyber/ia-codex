@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {Sparkles,ArrowRight,MessageSquare,Clapperboard,Puzzle,Server,Globe2,ShieldCheck,Zap,Code2,Star,GitBranch,Clock3,ExternalLink} from 'lucide-react';
 import './landing.css';
 
-const REPO='lnobrega26/ia-codex';
+const REPO='lnobrega26-cyber/ia-codex';
 export default function Landing(){
   const [github,setGithub]=useState(null);
   const [latest,setLatest]=useState(null);
