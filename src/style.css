@@ -11,3 +11,6 @@
 .message-error p{color:#ffb4b4!important}.messages article>small{color:#8d83a7;font-size:10px}
 
 .admin-form label{display:block;font-size:11px;color:#c5c2cf;margin:13px 0 6px}.admin-form input:not([type=checkbox]){width:100%;padding:10px;border:1px solid #3a3944;border-radius:7px;background:#111217;color:#fff}.admin-form .checkline{display:flex;align-items:center;gap:9px}.admin-form .checkline input{accent-color:#a995ff}.admin-form .plugin{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #34333d;padding:12px 0}.admin-form .plugin p{margin:5px 0;color:#aaa;font-size:11px}.admin-form .plugin small{color:#817d8d;font-size:10px}
+
+.header-status{display:flex;align-items:center;gap:8px}.api-dot{width:7px;height:7px;border-radius:50%;display:inline-block;background:#aaa}.api-dot.online{background:#65d69a;box-shadow:0 0 9px #65d69a88}.api-dot.offline{background:#ef7777;box-shadow:0 0 9px #ef777788}.api-dot.checking{background:#e6c36b}
+@media(max-width:650px){.header-status{gap:5px;font-size:9px}.header-status svg:last-child{display:none}}
