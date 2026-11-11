@@ -173,7 +173,7 @@ function OllamaModule(){
   async function refresh(){
     setBusy(true);setStatus('A procurar modelos no Ollama...');
     try{
-      const response=await fetch(endpoint.replace(/\\/$/,'')+'/api/tags');
+      const response=await fetch(endpoint.replace(/\/$/,'')+'/api/tags');
       const data=await response.json();
       if(!response.ok)throw new Error(data.error||'Ollama não respondeu.');
       const names=(data.models||[]).map(item=>item.name).filter(Boolean);
@@ -192,7 +192,7 @@ function OllamaModule(){
     const next=[...messages.filter(item=>!item.error),{role:'user',content:text}];
     setMessages(next);setPrompt('');setBusy(true);setStatus('A gerar resposta com '+model+'...');
     try{
-      const response=await fetch(endpoint.replace(/\\/$/,'')+'/api/chat',{
+      const response=await fetch(endpoint.replace(/\/$/,'')+'/api/chat',{
         method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({model:model.trim(),messages:next.map(item=>({role:item.role,content:item.content})),stream:false})
       });
