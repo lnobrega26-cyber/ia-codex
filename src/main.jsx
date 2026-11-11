@@ -100,7 +100,7 @@ function App(){
       }
     }catch(e){C(current=>[...current,{role:'assistant',content:e.message,language:language,error:true}])}finally{LS('');B(false)}
   }
-  const nav=[['Chat',MessageSquare],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user.is_admin?[['Admin',Settings2]]:[])];
+  const nav=[['Chat',MessageSquare],['Estúdio',Clapperboard],['Plugins',Puzzle],['Minecraft',Server],['DarkOS',Terminal],...(user?.is_admin?[['Admin',Settings2]]:[])];
   if(loading)return <div className="auth-screen">A carregar a IA CODEX...</div>;
   if(!user)return <AuthScreen onAuth={saveAuth}/>;
   return <div className="app"><aside><h2><Sparkles/> IA CODEX</h2><p className="sub">O teu espaço inteligente</p><div className="wallet-mini"><Coins/><b>{user.credits.toLocaleString('pt-PT')}</b><small>TOKENS</small></div><button className="new" onClick={()=>{T('Chat');C([])}}><Plus/> Nova conversa</button><small>ESPAÇO DE TRABALHO</small>{nav.map(([n,I])=><button className={'nav '+(t===n?'sel':'')} onClick={()=>T(n)}><I/>{n}</button>)}<div className="sidebottom">● Conta ativa<br/><small>@{user.username}</small><button className="logout" onClick={logout}><LogOut/> Terminar sessão</button></div></aside><main><header>{t}<span className="header-status"><i className={'api-dot '+apiStatus}/>{apiStatus==='checking'?'A verificar API':apiStatus==='online'?'API ligada':'API indisponível'} <Coins/> {user.credits.toLocaleString('pt-PT')} tokens <Settings2/></span></header>
