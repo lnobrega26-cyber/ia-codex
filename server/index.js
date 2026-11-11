@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -272,5 +273,15 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+if (pool) {
+  try {
+    const schema = await readFile(new URL('../database/schema.sql', import.meta.url), 'utf8');
+    await pool.query(schema);
+    console.log('Esquema PostgreSQL verificado.');
+  } catch (error) {
+    console.error('Não foi possível preparar a base de dados:', error.message);
+    process.exit(1);
+  }
+}
 if (!pool || !JWT_SECRET) console.warn('Configura DATABASE_URL e CODEX_JWT_SECRET antes de aceitar registos.');
 server.listen(PORT, () => console.log('IA CODEX API disponível na porta ' + PORT));
