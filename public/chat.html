@@ -1,74 +1,11 @@
 <!doctype html>
 <html lang="pt">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IA CODEX — Chat</title>
-<style>
-:root{color-scheme:dark;font-family:Inter,system-ui,Arial,sans-serif;background:#090711;color:#f5f1ff}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top,#24123c,#090711 60%)}
-main{max-width:900px;margin:auto;padding:28px 18px;min-height:100vh;display:flex;flex-direction:column}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #342447;padding-bottom:18px}
-h1{font-size:22px;margin:0;color:#c9a5ff}small,.muted{color:#a99bbd}
-.panel{margin:auto;width:min(100%,480px);background:#151020;border:1px solid #3a2a50;border-radius:18px;padding:22px}
-input,button,select{font:inherit;border-radius:10px;padding:12px;border:1px solid #49375f;background:#0e0a17;color:#fff;width:100%;margin:6px 0}
-button{background:#8246c7;border:0;font-weight:700;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
-.switch{background:transparent;border:1px solid #49375f}.hidden{display:none!important}
-#chat{display:flex;flex-direction:column;flex:1;min-height:0;margin-top:18px}
-#messages{flex:1;min-height:300px;max-height:65vh;overflow:auto;padding:12px;background:#100c19;border:1px solid #30223f;border-radius:14px}
-.msg{padding:12px 14px;border-radius:12px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
-.user{background:#342047;margin-left:12%}.assistant{background:#211a2c;margin-right:12%}
-form#send{display:flex;gap:8px;margin-top:12px}form#send input{flex:1}form#send button{width:110px}
-#status{font-size:12px;color:#c6afd9}#account{font-size:13px}
-</style></head>
-<body><main>
-<header><div><h1>IA CODEX</h1><small>Chat ligado ao servidor oficial</small></div><div id="account" class="muted">A verificar servidor…</div></header>
-<section id="auth" class="panel">
-<h2 id="authTitle">Entrar na IA CODEX</h2>
-<p class="muted">Cria uma conta ou inicia sessão para conversar.</p>
-<input id="username" autocomplete="username" placeholder="Nome de utilizador (3–24 caracteres)">
-<input id="password" type="password" autocomplete="current-password" placeholder="Palavra-passe (mínimo 10 caracteres)">
-<button id="authSubmit">Entrar</button><button class="switch" id="toggle">Criar conta</button>
-<p id="authError" class="muted" role="status"></p>
-</section>
-<section id="chat" class="hidden">
-<div class="muted" id="credits"></div>
-<div id="messages" aria-live="polite"><p class="muted">Olá! Envia uma mensagem para começar.</p></div>
-<form id="send"><input id="prompt" placeholder="Escreve a tua mensagem…" autocomplete="off"><button id="sendBtn">Enviar</button></form>
-<button class="switch" id="logout">Terminar sessão</button>
-</section>
-<p id="status">A ligar…</p>
-</main>
-<script>
-const API='https://ia-codex-api-wee5.onrender.com/api';
-const $=id=>document.getElementById(id);
-let token=localStorage.getItem('iacodex_token')||'', user=null, registering=false, history=[];
-async function request(path,options={}) {
- const headers={'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(options.headers||{})};
- const response=await fetch(API+path,{...options,headers});
- const data=await response.json().catch(()=>({error:'Resposta inválida do servidor.'}));
- if(!response.ok) throw new Error(data.error||'Erro HTTP '+response.status);
- return data;
-}
-function showError(message){$('authError').textContent=message}
-function addMessage(role,content){const div=document.createElement('div');div.className='msg '+role;div.textContent=content;$('messages').append(div);$('messages').scrollTop=$('messages').scrollHeight}
-function showChat(data){user=data.user;$('auth').classList.add('hidden');$('chat').classList.remove('hidden');$('account').textContent='@'+user.username;$('credits').textContent='Créditos: '+user.credits;history=[]}
-async function checkHealth(){
- try{const h=await request('/health');$('status').textContent=h.ok?'Servidor online · Base de dados '+(h.databaseConfigured?'ligada':'por configurar')+' · Modelos: '+h.modelsConfigured:'Servidor indisponível';}
- catch(e){$('status').textContent='Não foi possível ligar ao servidor: '+e.message}
-}
-$('toggle').onclick=()=>{registering=!registering;$('authTitle').textContent=registering?'Criar conta':'Entrar na IA CODEX';$('authSubmit').textContent=registering?'Registar':'Entrar';$('toggle').textContent=registering?'Já tenho conta':'Criar conta';$('password').autocomplete=registering?'new-password':'current-password';showError('')};
-$('authSubmit').onclick=async()=>{
- showError('');$('authSubmit').disabled=true;
- try{const data=await request(registering?'/auth/register':'/auth/login',{method:'POST',body:JSON.stringify({username:$('username').value,password:$('password').value})});token=data.token;localStorage.setItem('iacodex_token',token);showChat(data)}
- catch(e){showError(e.message)}finally{$('authSubmit').disabled=false}
-};
-$('send').onsubmit=async e=>{
- e.preventDefault();const prompt=$('prompt').value.trim();if(!prompt)return;
- $('prompt').value='';addMessage('user',prompt);history.push({role:'user',content:prompt});$('sendBtn').disabled=true;
- try{const data=await request('/chat',{method:'POST',body:JSON.stringify({messages:history})});addMessage('assistant',data.reply);history.push({role:'assistant',content:data.reply});$('credits').textContent='Créditos: '+data.credits}
- catch(e){addMessage('assistant','Não foi possível obter resposta: '+e.message);history.pop()}
- finally{$('sendBtn').disabled=false;$('prompt').focus()}
-};
-$('logout').onclick=()=>{token='';user=null;history=[];localStorage.removeItem('iacodex_token');$('chat').classList.add('hidden');$('auth').classList.remove('hidden');$('account').textContent='Sessão terminada'};
-(async()=>{await checkHealth();if(token){try{const data=await request('/auth/me');showChat(data)}catch{token='';localStorage.removeItem('iacodex_token')}}})();
-</script></body></html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0;url=./ia-codex-chat.html">
+<title>IA CODEX — A abrir chat</title>
+<script>location.replace('./ia-codex-chat.html');</script>
+</head>
+<body><p>A abrir a IA CODEX… <a href="./ia-codex-chat.html">Continuar</a></p></body>
+</html>
