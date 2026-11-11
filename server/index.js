@@ -9,7 +9,8 @@ const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false }
 }) : null;
-const ALLOWED_ORIGINS = (process.env.CODEX_ALLOWED_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);\nconst buckets = new Map();
+const ALLOWED_ORIGINS = (process.env.CODEX_ALLOWED_ORIGIN || '').split(',').map(x => x.trim()).filter(Boolean);
+const buckets = new Map();
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 25;
 const MAX_BODY = 1024 * 1024;
@@ -170,7 +171,9 @@ const server = http.createServer(async (req, res) => {
       if (!selected) return send(res, data.modelId ? 400 : 503, { error: data.modelId ? 'Modelo inválido ou indisponível.' : 'Nenhum modelo está configurado. Adiciona pelo menos um modelo gratuito no servidor.' });
       const key = process.env[selected.apiKeyEnv];
       if (!key) return send(res, 503, { error: 'O fornecedor deste modelo ainda não está configurado no servidor.' });
-      const totalChars = messages.reduce((sum, item) => sum + item.content.length, 0);\n      if (totalChars > 30000) return send(res, 413, { error: 'A conversa é demasiado longa. Começa uma nova conversa ou reduz o texto.' });\n      const inputEstimate = Math.ceil(totalChars / 2) + 200;
+      const totalChars = messages.reduce((sum, item) => sum + item.content.length, 0);
+      if (totalChars > 30000) return send(res, 413, { error: 'A conversa é demasiado longa. Começa uma nova conversa ou reduz o texto.' });
+      const inputEstimate = Math.ceil(totalChars / 2) + 200;
       const reserve = selected.free ? 0 : Math.ceil(inputEstimate * Number(selected.inputCostPer1k) / 1000 + MAX_OUTPUT_TOKENS * Number(selected.outputCostPer1k) / 1000);
       const afterReserve = await reserveCredits(claims.sub, reserve, selected.id);
       if (afterReserve === null) {
