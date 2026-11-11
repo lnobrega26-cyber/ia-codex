@@ -17,7 +17,7 @@ const MAX_BODY = 1024 * 1024;
 const STARTER_CREDITS = 1000;
 const MAX_OUTPUT_TOKENS = 1200;
 
-function models() {
+function envModels() {
   try {
     const list = JSON.parse(process.env.CODEX_MODELS || '[]');
     if (!Array.isArray(list)) return [];
@@ -65,7 +65,7 @@ function auth(req) {
   catch { throw Object.assign(new Error('Sessão expirada. Entra novamente.'), { status: 401 }); }
 }
 async function getUser(id) {
-  const result = await pool.query('SELECT id, username, credits FROM codex_users WHERE id=$1', [id]);
+  const result = await pool.query('SELECT id, username, credits, is_admin FROM codex_users WHERE id=$1', [id]);
   return result.rows[0] || null;
 }
 async function reserveCredits(userId, amount, modelId) {
@@ -115,7 +115,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, { ok: true, databaseConfigured: Boolean(pool), authConfigured: Boolean(JWT_SECRET), modelsConfigured: publicModels().length });
   }
   if (req.method === 'GET' && url.pathname === '/api/models') {
-    return send(res, 200, { models: publicModels() });
+    return send(res, 200, { models: await publicModels() });
   }
 
   try {
@@ -131,11 +131,11 @@ const server = http.createServer(async (req, res) => {
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
-          const created = await client.query('INSERT INTO codex_users(username,password_hash,credits) VALUES($1,$2,$3) RETURNING id,username,credits', [username, hash, STARTER_CREDITS]);
+          const created = await client.query('INSERT INTO codex_users(username,password_hash,credits) VALUES($1,$2,$3) RETURNING id,username,credits,is_admin', [username, hash, STARTER_CREDITS]);
           await client.query('INSERT INTO codex_credit_transactions(user_id,amount,reason) VALUES($1,$2,$3)', [created.rows[0].id, STARTER_CREDITS, 'bónus de boas-vindas']);
           await client.query('COMMIT');
           const user = created.rows[0];
-          return send(res, 201, { token: makeToken(user), user: { id: user.id, username: user.username, credits: user.credits } });
+          return send(res, 201, { token: makeToken(user), user: { id: user.id, username: user.username, credits: user.credits, is_admin: user.is_admin } });
         } catch (e) {
           await client.query('ROLLBACK');
           if (e.code === '23505') return send(res, 409, { error: 'Esse nome de utilizador já existe.' });
@@ -144,12 +144,12 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'POST' && url.pathname === '/api/auth/login') {
         const username = String(data.username || '').trim().toLowerCase();
-        const result = await pool.query('SELECT id,username,password_hash,credits FROM codex_users WHERE username=$1', [username]);
+        const result = await pool.query('SELECT id,username,password_hash,credits,is_admin FROM codex_users WHERE username=$1', [username]);
         const user = result.rows[0];
         if (!user || !(await bcrypt.compare(String(data.password || ''), user.password_hash))) {
           return send(res, 401, { error: 'Utilizador ou palavra-passe incorretos.' });
         }
-        return send(res, 200, { token: makeToken(user), user: { id: user.id, username: user.username, credits: user.credits } });
+        return send(res, 200, { token: makeToken(user), user: { id: user.id, username: user.username, credits: user.credits, is_admin: user.is_admin } });
       }
       if (req.method === 'GET' && url.pathname === '/api/auth/me') {
         const claims = auth(req), user = await getUser(claims.sub);
@@ -158,7 +158,38 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    if (url.pathname === '/api/chat' && req.method === 'POST') {
+
+    if (url.pathname.startsWith('/api/admin/')) {
+      const claims = auth(req);
+      const adminResult = await pool.query('SELECT is_admin FROM codex_users WHERE id=$1', [claims.sub]);
+      if (!adminResult.rows[0]?.is_admin) return send(res, 403, { error: 'Apenas administradores podem aceder a esta área.' });
+      if (url.pathname === '/api/admin/models' && req.method === 'GET') {
+        const result = await pool.query('SELECT id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,enabled,description FROM codex_models ORDER BY name');
+        return send(res, 200, { models: result.rows });
+      }
+      if (url.pathname === '/api/admin/models' && req.method === 'POST') {
+        const data = await body(req);
+        const id = String(data.id || '').trim().toLowerCase();
+        const name = String(data.name || '').trim();
+        const provider = String(data.provider || '').trim();
+        const modelName = String(data.model || '').trim();
+        const apiBase = String(data.apiBase || '').trim().replace(/\/$/, '');
+        const apiKeyEnv = String(data.apiKeyEnv || '').trim();
+        const inputCost = Number(data.inputCostPer1k);
+        const outputCost = Number(data.outputCostPer1k);
+        if (!/^[a-z0-9_-]{2,60}$/.test(id) || !name || !provider || !modelName || !/^https:\/\//.test(apiBase) || !/^[A-Z][A-Z0-9_]{2,60}$/.test(apiKeyEnv) || !Number.isFinite(inputCost) || inputCost < 0 || !Number.isFinite(outputCost) || outputCost < 0) {
+          return send(res, 400, { error: 'Revê os campos do modelo, URL HTTPS e custos (valores não negativos).' });
+        }
+        if (data.free && (inputCost !== 0 || outputCost !== 0)) return send(res, 400, { error: 'Um modelo gratuito para o utilizador tem de ter custo zero em créditos.' });
+        const result = await pool.query(
+          'INSERT INTO codex_models(id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,enabled,description) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,provider=EXCLUDED.provider,model=EXCLUDED.model,api_base=EXCLUDED.api_base,api_key_env=EXCLUDED.api_key_env,input_cost_per_1k=EXCLUDED.input_cost_per_1k,output_cost_per_1k=EXCLUDED.output_cost_per_1k,free=EXCLUDED.free,enabled=EXCLUDED.enabled,description=EXCLUDED.description RETURNING id,name,provider,model,api_base,api_key_env,input_cost_per_1k,output_cost_per_1k,free,enabled,description',
+          [id,name,provider,modelName,apiBase,apiKeyEnv,inputCost,outputCost,Boolean(data.free),data.enabled!==false,String(data.description||'').slice(0,180)]
+        );
+        return send(res, 200, { model: result.rows[0] });
+      }
+      return send(res, 404, { error: 'Rota administrativa não encontrada.' });
+    }
+\n    if (url.pathname === '/api/chat' && req.method === 'POST') {
       if (!pool || !JWT_SECRET) return send(res, 503, { error: 'Autenticação e base de dados ainda não configuradas.' });
       const claims = auth(req), data = await body(req);
       if (!Array.isArray(data.messages) || !data.messages.length || data.messages.length > 40) return send(res, 400, { error: 'Lista de mensagens inválida (máximo 40).' });
@@ -166,7 +197,7 @@ const server = http.createServer(async (req, res) => {
         if (!m || !['user','assistant'].includes(m.role) || typeof m.content !== 'string') throw Object.assign(new Error('Formato de mensagem inválido.'), { status: 400 });
         return { role: m.role, content: m.content.slice(0, 12000) };
       });
-      const catalog = models();
+      const catalog = await models();
       const selected = data.modelId ? catalog.find(m => m.id === data.modelId) : catalog.find(m => m.free);
       if (!selected) return send(res, data.modelId ? 400 : 503, { error: data.modelId ? 'Modelo inválido ou indisponível.' : 'Nenhum modelo está configurado. Adiciona pelo menos um modelo gratuito no servidor.' });
       const key = process.env[selected.apiKeyEnv];
