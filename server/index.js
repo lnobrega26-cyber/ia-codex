@@ -41,7 +41,7 @@ async function models() {
   return envModels();
 }
 async function publicModels() {
-  return (await models()).map(m => ({
+  return (await models()).filter(m => Boolean(process.env[m.apiKeyEnv])).map(m => ({
     id: m.id, name: m.name, provider: m.provider,
     description: String(m.description || '').slice(0, 180),
     free: Boolean(m.free),
@@ -224,10 +224,10 @@ const server = http.createServer(async (req, res) => {
         return { role: m.role, content: m.content.slice(0, 12000) };
       });
       const catalog = await models();
-      const selected = data.modelId ? catalog.find(m => m.id === data.modelId) : catalog.find(m => m.free);
-      if (!selected) return send(res, data.modelId ? 400 : 503, { error: data.modelId ? 'Modelo inválido ou indisponível.' : 'Nenhum modelo está configurado. Adiciona pelo menos um modelo gratuito no servidor.' });
+      const availableCatalog = catalog.filter(m => Boolean(process.env[m.apiKeyEnv]));
+      const selected = data.modelId ? availableCatalog.find(m => m.id === data.modelId) : availableCatalog.find(m => m.free);
+      if (!selected) return send(res, 503, { error: availableCatalog.length ? 'Escolhe um modelo disponível no seletor.' : 'Ainda não há modelos ligados: o administrador precisa de configurar no servidor a chave de acesso de pelo menos um fornecedor.' });
       const key = process.env[selected.apiKeyEnv];
-      if (!key) return send(res, 503, { error: 'O fornecedor deste modelo ainda não está configurado no servidor.' });
       const totalChars = messages.reduce((sum, item) => sum + item.content.length, 0);
       if (totalChars > 30000) return send(res, 413, { error: 'A conversa é demasiado longa. Começa uma nova conversa ou reduz o texto.' });
       const inputEstimate = Math.ceil(totalChars / 2) + 200;
